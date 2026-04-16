@@ -124,7 +124,8 @@ export class NotebookLibrary {
     // Ensure uniqueness
     let id = base;
     let counter = 1;
-    while (this.library.notebooks.some((n) => n.id === id)) {
+    const existingNotebooks = this.library?.notebooks || [];
+    while (existingNotebooks.some((n) => n.id === id)) {
       id = `${base}-${counter}`;
       counter++;
     }

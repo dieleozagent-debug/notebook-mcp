@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  notebooklm-mcp:
+    build: .
+    container_name: notebooklm-mcp-v12
+    restart: always
+    environment:
+      - LOGIN_EMAIL=dieleozagent@gmail.com
+      - LOGIN_PASSWORD=kxsdnhfnjmhmdfla
+      - AUTO_LOGIN_ENABLED=true
+      - NOTEBOOK_URL=https://notebooklm.google.com/notebook/2bcb4afe-2d5e-48ce-9c38-b50cd46baaaf
+      - NODE_ENV=production
+    volumes:
+      - ./user_data:/app/user_data
+      - ./scripts:/app/scripts
+    networks:
+      - docker_sicc_net
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10mb"
+        max-file: "3"
+
+networks:
+  docker_sicc_net:
+    external: true
