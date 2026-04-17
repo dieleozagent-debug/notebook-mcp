@@ -4,7 +4,10 @@ services:
   notebooklm-mcp:
     build: .
     container_name: notebooklm-mcp-v12
+    init: true
     restart: always
+    tty: true
+    stdin_open: true
     environment:
       - LOGIN_EMAIL=dieleozagent@gmail.com
       - LOGIN_PASSWORD=kxsdnhfnjmhmdfla
@@ -16,11 +19,13 @@ services:
       - ./scripts:/app/scripts
     networks:
       - docker_sicc_net
+    ports:
+      - "3001:3001"
     logging:
-      driver: "json-file"
+      driver: json-file
       options:
-        max-size: "10mb"
-        max-file: "3"
+        max-size: 10mb
+        max-file: 3
 
 networks:
   docker_sicc_net:
