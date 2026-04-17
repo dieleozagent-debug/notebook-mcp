@@ -49,14 +49,21 @@ Actúa como la **Fase 3 (Oracle-Check)** del Bucle de Decantación de SICC:
 ### A. Verificación de Salud (Healthcheck)
 Ejecutar desde el host:
 ```bash
-curl http://localhost:3001/health
+wget --quiet --tries=1 --spider http://localhost:3001/health
 ```
 **Respuesta esperada:** `{"status":"healthy", "version":"1.2.1-SICC"}`
 
-### B. Prueba de Oráculo (SSE)
-Para probar la conexión del Brain:
-1. Abrir el MCP Inspector apuntando a `http://localhost:3001/sse`.
-2. Ejecutar la herramienta `ask_question`.
+### B. Prueba de Conectividad en Red Interna (Brain -> Oráculo)
+Para probar que el Agente puede consumir la SAPI de forma autónoma sin usar `docker exec`, se debe ejecutar un script de test desde el contenedor del Agente apuntando al nombre del servicio:
+```bash
+docker exec dieleozagent-debug-dieleozagent-1 node scripts/test-oracle-sapi.js
+```
+**Resultado esperado:**
+```text
+📡 Conectando al Oráculo SAPI en http://notebooklm-mcp-v12:3001/sse...
+✅ Oráculo SAPI: Saludable y Respondiendo.
+🚀 [PRUEBA SUPERADA] El puerto 3001 está activo y el Brain tiene acceso total.
+```
 
 ## 7. Seguridad y Persistencia
 - **.gitignore Blindado:** Bloqueo absoluto de `.env` y `user_data/` para proteger la sesión de Google.
