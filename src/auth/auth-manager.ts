@@ -933,12 +933,15 @@ export class AuthManager {
       const context = await chromium.launchPersistentContext(
         CONFIG.chromeProfileDir,
         {
-          headless: !shouldShowBrowser, // Use override or default to visible for setup
+          headless: !shouldShowBrowser,
           channel: "chrome" as const,
           viewport: CONFIG.viewport,
           locale: "en-US",
           timezoneId: "Europe/Berlin",
           args: [
+            "--no-sandbox",
+            "--disable-setuid-sandbox",
+            "--disable-gpu",
             "--disable-blink-features=AutomationControlled",
             "--disable-dev-shm-usage",
             "--no-first-run",

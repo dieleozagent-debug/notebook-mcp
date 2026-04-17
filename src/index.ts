@@ -31,7 +31,9 @@
  */
 
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
-import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import express from "express";
+import cors from "cors";
 import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
@@ -98,8 +100,7 @@ class NotebookLMMCPServer {
     const allTools = buildToolDefinitions(this.library) as Tool[];
     this.toolDefinitions = this.settingsManager.filterTools(allTools);
 
-    // Setup handlers
-    this.setupHandlers();
+    // Shutdown handlers only (handlers are set up per-SSE-connection)
     this.setupShutdownHandlers();
 
     const activeSettings = this.settingsManager.getEffectiveSettings();
@@ -111,14 +112,36 @@ class NotebookLMMCPServer {
   }
 
   /**
-   * Setup MCP request handlers
+   * Create and configure a fresh Server instance.
+   * Called once per SSE connection so each client has its own isolated Server.
    */
-  private setupHandlers(): void {
+  private createConfiguredServer(): Server {
+    const server = new Server(
+      { name: "notebooklm-mcp", version: "1.1.0" },
+      {
+        capabilities: {
+          tools: {},
+          resources: {},
+          resourceTemplates: {},
+          prompts: {},
+          completions: {},
+          logging: {},
+        },
+      }
+    );
+    this.setupHandlersOn(server);
+    return server;
+  }
+
+  /**
+   * Setup MCP request handlers on a given Server instance.
+   */
+  private setupHandlersOn(server: Server): void {
     // Register Resource Handlers (Resources, Templates, Completions)
-    this.resourceHandlers.registerHandlers(this.server);
+    this.resourceHandlers.registerHandlers(server);
 
     // List available tools
-    this.server.setRequestHandler(ListToolsRequestSchema, async () => {
+    server.setRequestHandler(ListToolsRequestSchema, async () => {
       log.info("📋 [MCP] list_tools request received");
       return {
         tools: this.toolDefinitions,
@@ -126,7 +149,7 @@ class NotebookLMMCPServer {
     });
 
     // Handle tool calls
-    this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
+    server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
       const progressToken = (args as any)?._meta?.progressToken;
 
@@ -135,10 +158,10 @@ class NotebookLMMCPServer {
         log.info(`  📊 Progress token: ${progressToken}`);
       }
 
-      // Create progress callback function
+      // Progress callback uses the captured server instance for this connection
       const sendProgress = async (message: string, progress?: number, total?: number) => {
         if (progressToken) {
-          await this.server.notification({
+          await server.notification({
             method: "notifications/progress",
             params: {
               progressToken,
@@ -385,14 +408,57 @@ class NotebookLMMCPServer {
     log.info(`  Stealth: ${CONFIG.stealthEnabled}`);
     log.info("");
 
-    // Create stdio transport
-    const transport = new StdioServerTransport();
+    // SSE transport for SICC Architecture (Port 3001)
+    // Note: StdioServerTransport is NOT connected here because the MCP Server
+    // instance only supports one active transport at a time. In Docker/SICC mode
+    // only SSE is used; for local npx use run without Docker.
+    const app = express();
+    app.use(cors());
 
-    // Connect server to transport
-    await this.server.connect(transport);
+    // Session map: each SSE client gets its own Server+Transport pair
+    const activeSessions = new Map<string, SSEServerTransport>();
 
-    log.success("✅ MCP Server connected via stdio");
-    log.success("🎉 Ready to receive requests from Claude Code!");
+    app.get("/sse", async (req: any, res: any) => {
+      log.info("📡 New SSE connection request");
+
+      // Fresh Server per connection — avoids "Already connected to a transport" error
+      const connectionServer = this.createConfiguredServer();
+      const transport = new SSEServerTransport("/messages", res);
+
+      activeSessions.set(transport.sessionId, transport);
+      log.info(`  Session: ${transport.sessionId}`);
+
+      res.on("close", () => {
+        activeSessions.delete(transport.sessionId);
+        log.info(`📡 SSE session closed: ${transport.sessionId}`);
+      });
+
+      await connectionServer.connect(transport);
+      log.success(`✅ SSE transport connected (session: ${transport.sessionId})`);
+    });
+
+    app.post("/messages", async (req: any, res: any) => {
+      const sessionId = req.query.sessionId as string;
+      const transport = activeSessions.get(sessionId);
+      if (transport) {
+        await transport.handlePostMessage(req, res);
+      } else {
+        log.warn(`⚠️ /messages: unknown session ${sessionId}`);
+        res.status(400).send(`No active SSE session for id: ${sessionId}`);
+      }
+    });
+
+    // Healthcheck endpoint for Docker
+    app.get("/health", (req: any, res: any) => {
+      res.status(200).json({ status: "healthy", version: "1.2.1-SICC" });
+    });
+
+    const PORT = process.env.PORT || 3001;
+    app.listen(PORT, () => {
+      log.success(`🚀 SAPI Oracle listening on port ${PORT} (SSE Enabled)`);
+    });
+
+    log.success("🎉 Ready to receive requests from Swarm and Claude Code!");
     log.info("");
     log.info("💡 Available tools:");
     for (const tool of this.toolDefinitions) {

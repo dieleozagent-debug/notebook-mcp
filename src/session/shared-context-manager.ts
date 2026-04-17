@@ -166,6 +166,9 @@ export class SharedContextManager {
       // - Chrome loads everything automatically
       ...(statePath && { storageState: statePath }),
       args: [
+        "--no-sandbox",           // required when running as root in Docker
+        "--disable-setuid-sandbox",
+        "--disable-gpu",
         "--disable-blink-features=AutomationControlled",
         "--disable-dev-shm-usage",
         "--no-first-run",
