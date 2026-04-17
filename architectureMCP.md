@@ -22,27 +22,20 @@ Actúa como la **Fase 3 (Oracle-Check)** del Bucle de Decantación de SICC:
 2.  El Oráculo recibe la propuesta y la audita contra las libretas de ingeniería cargadas en NotebookLM.
 3.  El Oráculo devuelve un veredicto de conformidad. Si hay discrepancia, el Oráculo prevalece sobre la "intuición" de la IA generativa.
 
-## 4. Comunicación con el Brain (Estado Actual vs. Ideal)
+## 4. Comunicación con el Brain (Arquitectura SAPI v12.7)
 
-### 🔴 Estado Actual: Táctico (STDIO Bridge)
-- **Método:** `docker exec -i notebooklm-mcp-v12 npx tsx src/index.ts`
-- **Problema:** Cada consulta arranca un proceso nuevo de Node y una instancia de Chrome. Esto genera una latencia de 10-15s y riesgo de "Race Conditions" en la sesión de Google.
+El Oráculo de NotebookLM ha evolucionado de un script táctico a un **Servicio de Red Persistente (SAPI)**.
 
-### 🟢 Estado Ideal: Estratégico (SSE / Port 3001)
-- **Método:** Comunicación vía **SSE (Server-Sent Events)** a través del puerto expuesto **3001**.
-- **Arquitectura Ideal:**
-    - El Oráculo corre como un **Servicio de Red Persistente**.
-    - El Agente (Brain) se conecta mediante un cliente HTTP persistente.
-    - **Latencia Esperada:** < 2s.
-    - **Beneficio:** Mantenimiento de una única instancia de Chrome abierta 24/7, permitiendo "Interrogaciones Iterativas" (preguntas de seguimiento) sin pérdida de contexto.
+- **Modo de Operación:** Servidor Dual (STDIO para CLI + SSE para el Brain).
+- **Puerto Activo:** `3001` (Mapeado y monitoreado en Docker).
+- **Latencia:** < 1s (Chrome se mantiene vivo 24/7 en segundo plano).
+- **Beneficio:** Permite "Interrogaciones Iterativas" (preguntas de seguimiento forense) sin pérdida de contexto ni reconexiones pesadas a Google.
 
 ---
 
-## 5. Estado Actual (v12.7) - OPERATIVO 🟢
-- **Modo de Operación:** Servidor Dual (STDIO + SSE).
-- **Puerto Activo:** `3001` (Mapeado en Docker).
-- **Salud del Sistema:** Monitoreada por Healthcheck nativo en Docker.
-- **Soberanía:** Repositorio propio en `dieleozagent-debug/notebook-mcp`.
+## 5. Soberanía del Código 🟢
+- **Repositorio Oficial:** [dieleozagent-debug/notebook-mcp](https://github.com/dieleozagent-debug/notebook-mcp)
+- **Salud del Sistema:** Monitoreada autónomamente por Healthcheck nativo en Docker.
 
 ## 6. Protocolo de Pruebas (Test Patterns)
 
