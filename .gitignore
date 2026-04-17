@@ -10,6 +10,7 @@ dist/
 .env.local
 
 # Data directories (auth & sessions)
+user_data/
 data/
 browser_state/
 chrome_profile/
