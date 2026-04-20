@@ -158,31 +158,34 @@ export class BrowserSession {
       throw new Error("Page not initialized");
     }
 
-    try {
-      // PRIMARY: Exact Python selector - textarea.query-box-input
-      log.info("  ⏳ Waiting for chat input (textarea.query-box-input)...");
-      await this.page.waitForSelector("textarea.query-box-input", {
-        timeout: 10000, // Python uses 10s timeout
-        state: "visible", // ONLY check visibility (NO disabled check!)
-      });
-      log.success("  ✅ Chat input ready!");
-    } catch {
-      // FALLBACK: Python alternative selector
+    const selectors = [
+      'textarea[aria-label="Cuadro de consulta"]', // ES (Robust)
+      'textarea[aria-label="Ask a question"]',       // EN (Robust)
+      'textarea[aria-label="Haz una pregunta"]',    // ES Alternative
+      "textarea.query-box-input",                 // Specific
+      'textarea[aria-label="Feld für Anfragen"]',    // DE
+    ];
+
+    log.info(`  ⏳ Waiting for NotebookLM interface (trying ${selectors.length} selectors)...`);
+
+    for (const selector of selectors) {
       try {
-        log.info("  ⏳ Trying fallback selector (aria-label)...");
-        await this.page.waitForSelector('textarea[aria-label="Feld für Anfragen"]', {
-          timeout: 5000, // Python uses 5s for fallback
+        await this.page.waitForSelector(selector, {
+          timeout: 15000, // Increased timeout
           state: "visible",
         });
-        log.success("  ✅ Chat input ready (fallback)!");
-      } catch (error) {
-        log.error(`  ❌ NotebookLM interface not ready: ${error}`);
-        throw new Error(
-          "Could not find NotebookLM chat input. " +
-          "Please ensure the notebook page has loaded correctly."
-        );
+        log.success(`  ✅ Chat input ready! (${selector})`);
+        return;
+      } catch {
+        continue;
       }
     }
+
+    log.error("  ❌ NotebookLM interface not ready after trying all selectors.");
+    throw new Error(
+      "Could not find NotebookLM chat input. " +
+      "Please ensure the notebook page has loaded correctly."
+    );
   }
 
   private isPageClosedSafe(): boolean {
@@ -314,7 +317,7 @@ export class BrowserSession {
       }
 
       try {
-        await this.page.evaluate((data) => {
+        await this.page.evaluate((data: any) => {
           for (const [key, value] of Object.entries(data)) {
             // @ts-expect-error - sessionStorage exists in browser context
             sessionStorage.setItem(key, value);
@@ -396,10 +399,32 @@ export class BrowserSession {
       // Small pause before submitting
       await randomDelay(500, 1000);
 
-      // Submit the question (Enter key)
+      // Submit the question
       log.info(`  📤 Submitting question...`);
       await sendProgress?.("Submitting question...", 3, 5);
+      
+      // Try Enter first
       await page.keyboard.press("Enter");
+      await randomDelay(500, 1000);
+
+      // Verify if still in the input, if so, click the submit button
+      try {
+        const submitButton = 'button.submit-button';
+        const buttonExists = await page.$(submitButton);
+        if (buttonExists) {
+          const isEnabled = await page.evaluate((sel: string) => {
+            const btn = document.querySelector(sel) as HTMLButtonElement;
+            return btn && !btn.disabled;
+          }, submitButton);
+          
+          if (isEnabled) {
+            log.info(`  🖱️ Clicking submit button...`);
+            await page.click(submitButton);
+          }
+        }
+      } catch (err: any) {
+        log.warning(`  ⚠️ Submit button click failed or not found: ${err.message}`);
+      }
 
       // Small pause after submit
       await randomDelay(1000, 1500);
@@ -474,10 +499,12 @@ export class BrowserSession {
       return null;
     }
 
-    // Use EXACT Python selectors (in order of preference)
     const selectors = [
-      "textarea.query-box-input", // ← PRIMARY Python selector
-      'textarea[aria-label="Feld für Anfragen"]', // ← Python fallback
+      'textarea[aria-label="Cuadro de consulta"]',
+      'textarea[aria-label="Ask a question"]',
+      'textarea[aria-label="Haz una pregunta"]',
+      "textarea.query-box-input",
+      'textarea[aria-label="Feld für Anfragen"]',
     ];
 
     for (const selector of selectors) {
@@ -486,7 +513,6 @@ export class BrowserSession {
         if (element) {
           const isVisible = await element.isVisible();
           if (isVisible) {
-            // NO disabled check! Just like Python!
             log.success(`  ✅ Found chat input: ${selector}`);
             return selector;
           }
@@ -572,7 +598,7 @@ export class BrowserSession {
 
         if (isDisabled) {
           // Check if there's an error message near the input
-          const parent = await input.evaluateHandle((el) => el.parentElement);
+          const parent = await input.evaluateHandle((el: any) => el.parentElement);
           const parentEl = parent.asElement();
           if (parentEl) {
             try {
