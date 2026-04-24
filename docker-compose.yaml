@@ -14,6 +14,7 @@ services:
       - AUTO_LOGIN_ENABLED=true
       - NOTEBOOK_URL=https://notebooklm.google.com/notebook/2bcb4afe-2d5e-48ce-9c38-b50cd46baaaf
       - NODE_ENV=production
+      - BROWSER_TIMEOUT=120000
     volumes:
       - ./user_data:/app/user_data
       - ./scripts:/app/scripts
